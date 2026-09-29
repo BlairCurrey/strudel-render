@@ -1,0 +1,30 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      # Samples, sample maps and soundfonts from strudel's CDN
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/strudel-render
+          key: strudel-samples-${{ hashFiles('src/page.ts', 'src/dirt-samples.json', 'test/fixtures/**') }}
+          restore-keys: strudel-samples-
+      # the runner image ships Google Chrome, which strudel-render drives
+      - run: google-chrome --version
+      - run: npm ci
+      - run: npm test

@@ -1,8 +1,8 @@
 // The command as a user runs it: the built dist/cli.js.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, test } from 'node:test';
 import { FIXTURES, readWav, tmp } from './helpers.ts';
 
@@ -66,10 +66,13 @@ describe('cli', { concurrency: 4 }, () => {
   });
 
   test('a non-WAV output without ffmpeg fails before rendering', () => {
-    // a PATH with node on it but not ffmpeg
+    // a PATH with nothing on it but node (on Linux ffmpeg can live in /usr/bin)
+    const bin = join(tmp, 'node-only-bin');
+    mkdirSync(bin, { recursive: true });
+    if (!existsSync(join(bin, 'node'))) symlinkSync(process.execPath, join(bin, 'node'));
     const r = run([pattern('any2', 'note("c3").s("sine")'), '-o', join(tmp, 'x.mp3'), '--end', '1'], {
       ...process.env,
-      PATH: `${dirname(process.execPath)}:/usr/bin:/bin`,
+      PATH: bin,
     });
     assert.equal(r.status, 1);
     assert.match(r.stderr, /needs ffmpeg/);
