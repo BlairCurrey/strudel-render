@@ -1,0 +1,30 @@
+{
+  "ref-reverb": {
+    "fixtureSha256": "8edd506d2e058e9eae87dbbf94665d8e920383d792406d88450cef11b4616942",
+    "exportedAt": "2026-09-29T00:51:14.885Z",
+    "from": "https://strudel.cc/",
+    "cycles": 4,
+    "sampleRate": 48000
+  },
+  "ref-samples": {
+    "fixtureSha256": "770d1e4b60b51e3270d0db7dfe0947fa0318af57f737c385e947da5f28bc0c53",
+    "exportedAt": "2026-09-29T00:53:07.198Z",
+    "from": "https://strudel.cc/",
+    "cycles": 4,
+    "sampleRate": 48000
+  },
+  "ref-soundfont": {
+    "fixtureSha256": "551fc9097d57b7fecb72282ad0ff45a3bdd5f6fb762c956f16525a3fb14158c0",
+    "exportedAt": "2026-09-29T00:51:26.048Z",
+    "from": "https://strudel.cc/",
+    "cycles": 4,
+    "sampleRate": 48000
+  },
+  "ref-synth": {
+    "fixtureSha256": "eabe4b474fe0503e80c5247c106173136089647c11560afcc54690a0a8d9ae3d",
+    "exportedAt": "2026-09-29T00:51:30.397Z",
+    "from": "https://strudel.cc/",
+    "cycles": 4,
+    "sampleRate": 48000
+  }
+}
