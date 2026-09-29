@@ -61,3 +61,6 @@ await render({ file: "track.js", out: "track.wav", normalize: -1 });
 ## Licence
 
 Licensed under the AGPL-3.0-or-later.
+
+strudel-render is an independent project, not affiliated with or endorsed by
+[Strudel](https://strudel.cc) or its maintainers.
