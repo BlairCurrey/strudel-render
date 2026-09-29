@@ -13,11 +13,12 @@ import { createServer } from 'node:http';
 import { availableParallelism, homedir, tmpdir } from 'node:os';
 import { dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chromium, type Browser, type BrowserContext, type Page } from 'playwright-core';
+import type { Browser, BrowserContext, Page } from 'playwright-core';
+import { installBrowser, launchBrowser, NoBrowserError } from './browser.ts';
 import type { Job, JobResult } from './protocol.ts';
 import { clock, wavHeader } from './wav.ts';
 
-export { clock };
+export { clock, NoBrowserError };
 
 export interface RenderOptions {
   /** Strudel source code. Give this or `file`. */
@@ -30,7 +31,9 @@ export interface RenderOptions {
   start?: number;
   /** Last cycle. Default: the length of the top-level `arrange()`. */
   end?: number;
-  /** Parallel renderers. Default: CPU cores − 1. */
+  /** Length in seconds from `start`, instead of `end`. */
+  seconds?: number;
+  /** Parallel renderers. Default: half the CPU cores. */
   jobs?: number;
   /** Pieces to cut the span into. Default: 2 × jobs. */
   chunks?: number;
@@ -42,7 +45,11 @@ export interface RenderOptions {
   preroll?: number;
   /** How far back a chunk may reach for held notes, in cycles. Default 64. */
   lookback?: number;
-  /** Cycles scheduled per suspend/resume. Default 4. */
+  /**
+   * Seconds of notes scheduled ahead of the renderer at a time. Default 0.2. Small is fast:
+   * every scheduled note's audio nodes are processed from the moment they're created, so
+   * scheduling far ahead makes every block of audio more expensive.
+   */
   window?: number;
   /** Crossfade at each seam, in seconds. Default 0.05. */
   xfade?: number;
@@ -54,8 +61,16 @@ export interface RenderOptions {
   bits?: 16 | 24 | 32;
   /** Seed for Math.random in the page. Default 1. */
   seed?: number;
-  /** Chrome or Chromium binary. Default: $STRUDEL_RENDER_CHROME, else the installed Google Chrome. */
+  /**
+   * A Chromium-based browser to render in. Default: $STRUDEL_RENDER_CHROME, else the first of
+   * Google Chrome, Microsoft Edge, Brave, Chromium, or the headless Chromium from --install-browser.
+   */
   chromePath?: string;
+  /**
+   * Called when no browser is found. Resolve true to download a headless Chromium
+   * (about 100 MB, once) and carry on. Default: don't — throw NoBrowserError.
+   */
+  onNoBrowser?: () => boolean | Promise<boolean>;
   /** Where samples and soundfonts are cached. Default: ~/.cache/strudel-render. */
   cacheDir?: string;
   /** Called about once a second while rendering. */
@@ -101,12 +116,14 @@ export async function render(options: RenderOptions): Promise<RenderResult> {
     tail: 5,
     preroll: 8,
     lookback: 64,
-    window: 4,
+    window: 0.2,
     xfade: 0.05,
     maxPolyphony: 1024,
     bits: 24 as const,
     seed: 1,
-    jobs: Math.max(1, availableParallelism() - 1),
+    // Half the cores: each renderer also costs start-up time, and past this
+    // more renderers stop helping (an hour: 6 → 120 s, 11 → 113 s on 12 cores).
+    jobs: Math.max(1, Math.floor(availableParallelism() / 2)),
     // an option given as undefined means "use the default"
     ...Object.fromEntries(Object.entries(options).filter(([, v]) => v !== undefined)),
   } as RenderOptions & Required<Pick<RenderOptions, 'start' | 'sampleRate' | 'tail' | 'preroll' | 'lookback' | 'window' | 'xfade' | 'maxPolyphony' | 'bits' | 'seed' | 'jobs'>>;
@@ -131,8 +148,10 @@ export async function render(options: RenderOptions): Promise<RenderResult> {
   const work = await mkdtemp(join(tmpdir(), 'strudel-render-'));
   const server = createServer((req, res) => {
     if (req.method === 'PUT' && req.url?.startsWith('/upload/')) {
-      const name = req.url.slice('/upload/'.length).replace(/[^\w.-]/g, '');
-      const ws = createWriteStream(join(work, name));
+      const url = new URL(req.url, 'http://x');
+      const name = url.pathname.slice('/upload/'.length).replace(/[^\w.-]/g, '');
+      // parts arrive one at a time, in order: the first creates the file, the rest append
+      const ws = createWriteStream(join(work, name), { flags: url.searchParams.get('part') === '0' ? 'w' : 'a' });
       req.pipe(ws);
       ws.on('finish', () => res.writeHead(200).end());
       ws.on('error', () => res.writeHead(500).end());
@@ -150,7 +169,12 @@ export async function render(options: RenderOptions): Promise<RenderResult> {
 
   let browser: Browser | undefined;
   try {
-    browser = await launch(o.chromePath ?? process.env.STRUDEL_RENDER_CHROME);
+    const chromePath = o.chromePath ?? process.env.STRUDEL_RENDER_CHROME;
+    browser = await launchBrowser(chromePath, log).catch(async (err) => {
+      if (!(err instanceof NoBrowserError) || !(await o.onNoBrowser?.())) throw err;
+      if (installBrowser() !== 0) throw new Error('downloading a headless Chromium failed');
+      return launchBrowser(chromePath, log);
+    });
     let progressHook: (job: number, cycle: number) => void = () => {};
 
     // A BrowserContext per page keeps each renderer in its own process, so
@@ -172,8 +196,11 @@ export async function render(options: RenderOptions): Promise<RenderResult> {
     const first = await newPage();
     const { cps, cycles } = await first.evaluate((c) => window.srInfo(c), code).catch(pageError);
     const start = o.start;
-    const end = o.end ?? cycles;
-    if (end == null) throw new Error('no top-level arrange() found, so the length is unknown — pass an end cycle (--end)');
+    if (o.end !== undefined && o.seconds !== undefined) throw new Error('give an end cycle or a length in seconds, not both');
+    const end = o.seconds !== undefined ? start + o.seconds * cps : (o.end ?? cycles);
+    if (end == null) {
+      throw new Error('no top-level arrange() found, so the length is unknown — pass --end (cycles) or --seconds');
+    }
     if (!(end > start)) throw new Error(`nothing to render: start ${start}, end ${end}`);
 
     const nChunks = Math.max(1, Math.min(o.chunks ?? o.jobs * 2, Math.floor(end - start)));
@@ -213,7 +240,7 @@ export async function render(options: RenderOptions): Promise<RenderResult> {
           floor: start,
           preroll: o.preroll,
           lookback: o.lookback,
-          window: o.window,
+          window: o.window * cps, // the page works in cycles
           sampleRate: o.sampleRate,
           maxPolyphony: o.maxPolyphony,
           uploadUrl: `${origin}/upload/chunk-${i}.f32`,
@@ -338,23 +365,6 @@ export async function render(options: RenderOptions): Promise<RenderResult> {
 function pageError(err: Error): never {
   const msg = err.message.replace(/^page\.evaluate: (Error: )?/, '').split('\n    at ')[0];
   throw new Error(`in the pattern or the page: ${msg}`);
-}
-
-// playwright-core ships no browser: use the one given, or the installed Chrome.
-async function launch(chromePath: string | undefined): Promise<Browser> {
-  try {
-    return await chromium.launch({
-      ...(chromePath ? { executablePath: chromePath } : { channel: 'chrome' }),
-      args: ['--autoplay-policy=no-user-gesture-required'],
-    });
-  } catch (err) {
-    throw new Error(
-      (chromePath ? `could not start the browser at ${chromePath}` : 'could not find Google Chrome') +
-        '. Install Google Chrome, or set STRUDEL_RENDER_CHROME to a Chrome or Chromium binary ' +
-        '(for example one installed with `npx playwright install chromium`).\n' +
-        (err as Error).message,
-    );
-  }
 }
 
 // Every page would otherwise download the sample maps, samples and

@@ -281,8 +281,14 @@ async function render(job: Job): Promise<JobResult> {
     out[2 * i] = L[i]!;
     out[2 * i + 1] = R[i]!;
   }
-  const res = await fetch(job.uploadUrl, { method: 'PUT', body: out });
-  if (!res.ok) throw new Error(`upload failed: ${res.status}`);
+  // Upload in parts, in order. Playwright copies every request body the page
+  // sends into a single string in Node, so one upload of a long chunk (a
+  // 5-minute chunk is ~115 MB) overflows Node's string limit and kills it.
+  const PART = 4 * 1024 * 1024; // floats: 16 MB
+  for (let off = 0, part = 0; off < out.length || part === 0; off += PART, part++) {
+    const res = await fetch(`${job.uploadUrl}?part=${part}`, { method: 'PUT', body: out.subarray(off, off + PART) });
+    if (!res.ok) throw new Error(`upload failed: ${res.status}`);
+  }
   return { beginFrame, frames: L.length, cps, scheduleMs, scheduled };
 }
 
