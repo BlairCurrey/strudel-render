@@ -6,7 +6,7 @@ times faster than exporting it from strudel.cc.
 ## Try it now
 
 ```sh
-npx strudel-render -e 'note("<[e4 d4 c4 d4] [e4 e4 e4 ~] [d4 d4 d4 ~] [e4 g4 g4 ~] [e4 d4 c4 d4] [e4 e4 e4 e4] [d4 d4 e4 d4] [c4 ~ ~ ~]>").s("piano")' --end 8 -o lamb.mp3
+npx strudel-render -e 'note("<[e4 d4 c4 d4] [e4 e4 e4 ~] [d4 d4 d4 ~] [e4 g4 g4 ~] [e4 d4 c4 d4] [e4 e4 e4 e4] [d4 d4 e4 d4] [c4 ~ ~ ~]>").s("piano")' --end 8 --tail 2 -o lamb.mp3
 ```
 
 It runs Strudel's own audio engine in your browser, headless, so the output is the same as the
