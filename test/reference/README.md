@@ -27,7 +27,7 @@ Per fixture, with tolerances in `reference.test.ts`:
 |---|---|
 | `ref-samples` | −79 dB sample for sample |
 | `ref-soundfont` | −72 dB sample for sample |
-| `ref-synth` | −77 dB except one known transient in strudel.cc's export at cycle 2 (marked `todo`) |
+| `ref-synth` | −77 dB except one known transient in strudel.cc's export at cycle 2 (marked `todo`). Measurable but not audible: compared by ear, no difference heard |
 | `ref-reverb` | −9 dB, 3.7 dB envelope — within strudel.cc's own export-to-export variation (−10 dB, 4.1 dB), since its reverb impulse is random |
 
 Found by this test and fixed: strudel-render loaded all of Dirt-Samples where strudel.cc loads a

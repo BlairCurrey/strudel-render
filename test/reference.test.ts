@@ -28,7 +28,8 @@ const KNOWN: Record<string, string> = {
     "strudel.cc's export has a transient at exactly cycle 2 on the delayed square lead (-17 dB, " +
     'ringing ~1 s in the delay), and a faint click there without the delay. It repeats exactly across ' +
     'exports, and sits on one of strudel.cc\'s one-cycle suspend points; strudel-render has neither. ' +
-    'Everywhere else the two agree to -77 dB.',
+    'Everywhere else the two agree to -77 dB. Not audible: compared by ear (strudel.cc export vs ' +
+    'strudel-render, and export vs strudel.cc live playback) on 2026-09-29, no difference heard.',
 };
 const manifestPath = join(refs, 'references.json');
 const manifest = existsSync(manifestPath) ? JSON.parse(readFileSync(manifestPath, 'utf8')) : {};
