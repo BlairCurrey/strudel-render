@@ -46,6 +46,10 @@ file without one, say how much to render with `--end` (in cycles) or `--seconds`
 
 Or from JavaScript:
 
+```sh
+npm install strudel-render
+```
+
 ```js
 import { render } from "strudel-render";
 
